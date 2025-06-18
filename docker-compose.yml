@@ -1,0 +1,93 @@
+services:
+  balancer-domain:
+    build:
+      context: .
+      dockerfile: build/Dockerfile.app
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: "uvicorn main:app --host 0.0.0.0 --port ${APP_PORT} --workers 4"
+    ulimits:
+      nofile:
+        soft: 4096
+        hard: 8192
+    networks:
+      - ntwrk
+
+  migrator:
+    image: amacneil/dbmate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=disable
+    volumes:
+      - ./db/migrations:/db/migrations
+      - ./dbmate.yml:/dbmate.yml
+    command: ["up"]
+    networks:
+      - ntwrk
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: balancer
+      POSTGRES_USER: balancer
+      POSTGRES_PASSWORD: balancer
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ntwrk
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ntwrk
+
+  locust:
+    build:
+      context: .
+      dockerfile: build/Dockerfile.locust
+    volumes:
+      - ./locustfile.py:/mnt/locustfile.py
+    ports:
+      - "${LOCUST_PORT}:${LOCUST_PORT}"
+    env_file:
+      - .env
+    environment:
+      - LOCUST_TARGET_HOST=${LOCUST_TARGET_HOST}
+    command: ["-f", "/mnt/locustfile.py", "--host", "${LOCUST_TARGET_HOST}"]
+    depends_on:
+      balancer-domain:
+        condition: service_started
+    networks:
+      - ntwrk
+
+networks:
+  ntwrk:
+    driver: bridge
