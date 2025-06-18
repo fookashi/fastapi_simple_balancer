@@ -22,7 +22,7 @@
 
    ```sh
    git clone https://github.com/fookashi/fastapi_simple_balancer.git
-   cd balancer
+   cd fastapi_simple_balancer
    ```
 2. **Запуск приложения:**
 
