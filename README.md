@@ -21,7 +21,7 @@
 1. **Клон репозитория:**
 
    ```sh
-   git clone <repo-url>
+   git clone https://github.com/fookashi/fastapi_simple_balancer.git
    cd balancer
    ```
 2. **Запуск приложения:**
